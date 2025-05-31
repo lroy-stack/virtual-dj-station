@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -17,7 +16,7 @@ import {
   Mic,
   Headphones
 } from 'lucide-react';
-import Link from 'next/link';
+import { Link } from 'react-router-dom';
 
 const RegisterPage = () => {
   const [formData, setFormData] = useState({
@@ -80,7 +79,7 @@ const RegisterPage = () => {
     <div className="min-h-screen bg-dark-gradient flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Back Button */}
-        <Link href="/">
+        <Link to="/">
           <Button variant="ghost" className="mb-6 text-muted-foreground hover:text-foreground">
             <ArrowLeft className="w-4 h-4 mr-2" />
             Volver al inicio
@@ -287,7 +286,7 @@ const RegisterPage = () => {
           <div className="text-center mt-6 pt-6 border-t border-border/50">
             <p className="text-muted-foreground">
               ¿Ya tienes cuenta?{' '}
-              <Link href="/login" className="text-primary hover:underline font-medium">
+              <Link to="/login" className="text-primary hover:underline font-medium">
                 Inicia sesión
               </Link>
             </p>

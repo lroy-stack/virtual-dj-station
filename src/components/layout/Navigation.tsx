@@ -1,7 +1,6 @@
 
 import React from 'react';
-import { useRouter } from 'next/router';
-import Link from 'next/link';
+import { useLocation, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { 
   Home, 
@@ -23,7 +22,7 @@ interface NavigationProps {
 }
 
 const Navigation: React.FC<NavigationProps> = ({ user, onLogout }) => {
-  const router = useRouter();
+  const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const navigationItems = [
@@ -36,7 +35,7 @@ const Navigation: React.FC<NavigationProps> = ({ user, onLogout }) => {
   ];
 
   const isActive = (href: string) => {
-    return router.pathname === href;
+    return location.pathname === href;
   };
 
   return (
@@ -44,7 +43,7 @@ const Navigation: React.FC<NavigationProps> = ({ user, onLogout }) => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
-          <Link href="/" className="flex items-center space-x-2">
+          <Link to="/" className="flex items-center space-x-2">
             <div className="w-8 h-8 radio-gradient rounded-lg flex items-center justify-center">
               <Music className="w-5 h-5 text-white" />
             </div>
@@ -57,7 +56,7 @@ const Navigation: React.FC<NavigationProps> = ({ user, onLogout }) => {
               if (item.protected && !user) return null;
               
               return (
-                <Link key={item.href} href={item.href}>
+                <Link key={item.href} to={item.href}>
                   <Button
                     variant={isActive(item.href) ? "default" : "ghost"}
                     size="sm"
@@ -98,12 +97,12 @@ const Navigation: React.FC<NavigationProps> = ({ user, onLogout }) => {
               </div>
             ) : (
               <div className="flex items-center space-x-2">
-                <Link href="/login">
+                <Link to="/login">
                   <Button variant="ghost" size="sm">
                     Iniciar Sesión
                   </Button>
                 </Link>
-                <Link href="/register">
+                <Link to="/register">
                   <Button size="sm" className="radio-gradient">
                     Registrarse
                   </Button>
@@ -135,7 +134,7 @@ const Navigation: React.FC<NavigationProps> = ({ user, onLogout }) => {
                 if (item.protected && !user) return null;
                 
                 return (
-                  <Link key={item.href} href={item.href}>
+                  <Link key={item.href} to={item.href}>
                     <Button
                       variant={isActive(item.href) ? "default" : "ghost"}
                       size="sm"
