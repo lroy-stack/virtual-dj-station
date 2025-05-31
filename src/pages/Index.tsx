@@ -1,24 +1,46 @@
 
 import { useQuery } from "@tanstack/react-query";
 import Navigation from "@/components/layout/Navigation";
-import AudioPlayer from "@/components/radio/AudioPlayer";
+import AdvancedAudioPlayer from "@/components/radio/AdvancedAudioPlayer";
 import NowPlaying from "@/components/radio/NowPlaying";
-import RecentTracks from "@/components/radio/RecentTracks";
+import PlaybackQueue from "@/components/radio/PlaybackQueue";
 import AIHost from "@/components/ai-host/AIHost";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Play, Users, Radio, Zap, Crown, Music } from "lucide-react";
-import { useRadio } from "@/hooks/useRadio";
+import { useAdvancedRadio } from "@/hooks/useAdvancedRadio";
 import { useState } from "react";
 
 const Index = () => {
-  const { radioState, togglePlay } = useRadio();
   const [isHostMinimized, setIsHostMinimized] = useState(false);
   const [user] = useState(null); // TODO: Replace with actual auth state
 
+  // Mock user tracks
+  const userTracks = [
+    {
+      id: '1',
+      title: 'Mi Canción Original',
+      artist: 'Usuario Artista',
+      artist_id: 'user1',
+      duration: 210,
+      file_url: '/audio/user_track1.mp3',
+      artwork_url: '/images/user_album1.jpg',
+      genre: 'Indie',
+      plays_count: 150,
+      priority_level: 3,
+      upload_date: '2024-01-20',
+      status: 'approved' as const
+    }
+  ];
+
+  const { 
+    radioState, 
+    togglePlay, 
+    skipToQueueItem 
+  } = useAdvancedRadio(userTracks, user?.subscription_tier || 'free');
+
   const handleLogout = () => {
-    // TODO: Implement logout
     console.log('Logout');
   };
 
@@ -28,7 +50,6 @@ const Index = () => {
     artistsActive: 34
   };
 
-  // Mock recent tracks data
   const recentTracks = [
     {
       id: '1',
@@ -83,6 +104,7 @@ const Index = () => {
               onClick={togglePlay}
               size="lg"
               className="radio-gradient hover:opacity-90 text-white px-8 py-4 text-lg"
+              disabled={radioState.isLoading}
             >
               <Play className="w-6 h-6 mr-2" />
               {radioState.isPlaying ? 'Pausar' : 'Escuchar Ahora'}
@@ -111,19 +133,25 @@ const Index = () => {
         </section>
 
         {/* Main Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Left Column - Now Playing & Recent */}
-          <div className="space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          {/* Left Column - Now Playing & Queue */}
+          <div className="lg:col-span-4 space-y-6">
             <NowPlaying
               track={radioState.currentTrack}
               isPlaying={radioState.isPlaying}
               listeners={stats.listeners}
             />
-            <RecentTracks tracks={recentTracks} />
+            
+            <PlaybackQueue
+              queue={radioState.queue}
+              currentIndex={0}
+              onSkipTo={skipToQueueItem}
+              canReorder={user?.subscription_tier !== 'free'}
+            />
           </div>
 
           {/* Center Column - AI Host */}
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-8">
             <AIHost
               currentTrack={radioState.currentTrack}
               isMinimized={isHostMinimized}
@@ -184,8 +212,11 @@ const Index = () => {
         </section>
       </main>
 
-      {/* Audio Player - Always visible */}
-      <AudioPlayer />
+      {/* Advanced Audio Player - Always visible */}
+      <AdvancedAudioPlayer 
+        userTracks={userTracks}
+        userTier={user?.subscription_tier || 'free'}
+      />
     </div>
   );
 };
