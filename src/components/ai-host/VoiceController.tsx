@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,7 +11,7 @@ import {
   SkipForward,
   Mic,
   Settings,
-  Waveform
+  AudioWaveform
 } from 'lucide-react';
 import { ContentItem } from '@/types/aihost';
 
@@ -74,7 +73,7 @@ const VoiceController: React.FC<VoiceControllerProps> = ({
       <CardHeader className="pb-3">
         <CardTitle className="text-sm font-medium flex items-center justify-between">
           <div className="flex items-center space-x-2">
-            <Waveform className="w-4 h-4" />
+            <AudioWaveform className="w-4 h-4" />
             <span>Control de Voz</span>
           </div>
           <Button

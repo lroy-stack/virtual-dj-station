@@ -28,6 +28,36 @@ const Index = () => {
     artistsActive: 34
   };
 
+  // Mock recent tracks data
+  const recentTracks = [
+    {
+      id: '1',
+      title: 'Midnight Dreams',
+      artist: 'Luna Rodriguez',
+      artist_id: 'artist1',
+      duration: 240,
+      file_url: '/audio/sample1.mp3',
+      genre: 'Indie Pop',
+      plays_count: 892,
+      priority_level: 2,
+      upload_date: '2024-01-15',
+      status: 'approved' as const
+    },
+    {
+      id: '2',
+      title: 'Electric Pulse',
+      artist: 'Neon Collective',
+      artist_id: 'artist2',
+      duration: 185,
+      file_url: '/audio/sample2.mp3',
+      genre: 'Electronic',
+      plays_count: 1340,
+      priority_level: 1,
+      upload_date: '2024-01-14',
+      status: 'approved' as const
+    }
+  ];
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/10">
       <Navigation user={user} onLogout={handleLogout} />
@@ -89,7 +119,7 @@ const Index = () => {
               isPlaying={radioState.isPlaying}
               listeners={stats.listeners}
             />
-            <RecentTracks />
+            <RecentTracks tracks={recentTracks} />
           </div>
 
           {/* Center Column - AI Host */}
