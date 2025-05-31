@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,6 +10,7 @@ import {
   Zap, 
   Music, 
   Mic,
+  Megaphone,
   TrendingUp,
   Users,
   Clock
@@ -29,6 +29,7 @@ const PlansPage = () => {
       icon: Music,
       color: 'from-gray-500 to-gray-600',
       popular: false,
+      stripe_price_id: '',
       features: [
         'Acceso completo a la radio 24/7',
         'Calidad de audio estándar',
@@ -52,6 +53,7 @@ const PlansPage = () => {
       icon: Star,
       color: 'from-primary to-primary/80',
       popular: true,
+      stripe_price_id: 'price_basic_artist',
       features: [
         'Todo lo del plan gratuito',
         'Sube hasta 5 canciones por mes',
@@ -69,12 +71,13 @@ const PlansPage = () => {
     {
       id: 'artist_premium',
       name: 'Artista Premium',
-      price: 24.99,
+      price: 19.99,
       period: 'mes',
       description: 'Para artistas profesionales',
       icon: Crown,
       color: 'from-secondary to-secondary/80',
       popular: false,
+      stripe_price_id: 'price_premium_artist',
       features: [
         'Todo lo del plan Artista Básico',
         'Canciones ilimitadas',
@@ -89,27 +92,72 @@ const PlansPage = () => {
       ]
     },
     {
-      id: 'advertiser',
-      name: 'Anunciante Pro',
-      price: 49.99,
+      id: 'advertiser_basic',
+      name: 'Anunciante Básico',
+      price: 14.99,
       period: 'mes',
-      description: 'Para crear anuncios con IA',
+      description: 'Para anunciantes pequeños',
       icon: Mic,
-      color: 'from-yellow-500 to-orange-500',
+      color: 'from-orange-500 to-red-500',
       popular: false,
+      stripe_price_id: 'price_basic_advertiser',
       features: [
         'Todo lo del plan gratuito',
         'Creación de anuncios con DJ IA',
-        'Hasta 10 anuncios activos',
-        'Prioridad alta en anuncios',
-        'Estadísticas de audiencia',
-        'Segmentación por horarios',
-        'Voces premium de ElevenLabs'
+        '1 anuncio activo',
+        '15 reproducciones por semana',
+        'Voz estándar de ElevenLabs',
+        'Estadísticas básicas'
       ],
       limitations: [
         'No incluye subida de música',
-        'Límite de 10 anuncios activos'
+        'Límite de 1 anuncio activo',
+        'Solo voz estándar'
       ]
+    },
+    {
+      id: 'advertiser_premium',
+      name: 'Anunciante Premium',
+      price: 29.99,
+      period: 'mes',
+      description: 'Para anunciantes profesionales',
+      icon: Megaphone,
+      color: 'from-purple-500 to-pink-500',
+      popular: false,
+      stripe_price_id: 'price_premium_advertiser',
+      features: [
+        'Todo lo del plan Anunciante Básico',
+        'Hasta 3 anuncios activos',
+        '50 reproducciones por semana',
+        'Selección de voces premium',
+        'Programación horaria avanzada',
+        'Estadísticas detalladas',
+        'Soporte prioritario'
+      ],
+      limitations: [
+        'No incluye subida de música'
+      ]
+    },
+    {
+      id: 'pro',
+      name: 'Plan Pro',
+      price: 49.99,
+      period: 'mes',
+      description: 'Todo en uno para profesionales',
+      icon: Crown,
+      color: 'from-yellow-500 to-orange-500',
+      popular: false,
+      stripe_price_id: 'price_pro',
+      features: [
+        'Todas las funciones de Artista Premium',
+        'Todas las funciones de Anunciante Premium',
+        'Hasta 5 anuncios activos',
+        '100 reproducciones por semana',
+        'Soporte dedicado',
+        'Acceso anticipado a nuevas funciones',
+        'Consultoría de marketing incluida'
+      ],
+      limitations: []
     }
   ];
 
@@ -144,6 +192,16 @@ const PlansPage = () => {
     }
   ];
 
+  const handleSelectPlan = (planId: string, price: number) => {
+    if (price === 0) {
+      // Redirect to registration for free plan
+      window.location.href = '/register';
+    } else {
+      // Redirect to registration with plan selection
+      window.location.href = `/register?plan=${planId}`;
+    }
+  };
+
   return (
     <div className="min-h-screen bg-dark-gradient">
       <Navigation />
@@ -160,7 +218,7 @@ const PlansPage = () => {
         </div>
 
         {/* Plans Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6 mb-12">
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 mb-12">
           {plans.map((plan) => (
             <Card 
               key={plan.id} 
@@ -221,6 +279,7 @@ const PlansPage = () => {
                     : 'border-primary/50 hover:bg-primary/10'
                 }`}
                 variant={plan.popular ? 'default' : plan.price === 0 ? 'secondary' : 'outline'}
+                onClick={() => handleSelectPlan(plan.id, plan.price)}
               >
                 {plan.price === 0 ? 'Empezar Gratis' : 'Suscribirse'}
               </Button>
