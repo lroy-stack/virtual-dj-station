@@ -12,10 +12,11 @@ import {
   ExternalLink 
 } from 'lucide-react';
 import { Track } from '@/types';
+import { ExternalTrack } from '@/services/MusicSourceManager';
 import AudioVisualizer from './AudioVisualizer';
 
 interface NowPlayingProps {
-  track?: Track;
+  track?: Track | ExternalTrack;
   isPlaying: boolean;
   listeners?: number;
 }
@@ -38,15 +39,22 @@ const NowPlaying: React.FC<NowPlayingProps> = ({
     );
   }
 
+  // Type-safe property access
+  const isUserTrack = 'file_url' in track;
+  const artworkUrl = isUserTrack ? track.artwork_url : (track as ExternalTrack).artwork_url;
+  const playsCount = isUserTrack ? (track as Track).plays_count : 0;
+  const priorityLevel = isUserTrack ? (track as Track).priority_level : 1;
+  const genre = track.genre;
+
   return (
     <Card className="glass-effect p-6 hover-lift">
       <div className="flex items-start gap-4">
         {/* Artwork */}
         <div className="relative">
           <div className="w-20 h-20 rounded-xl overflow-hidden bg-gradient-to-br from-primary to-secondary">
-            {track.artwork_url ? (
+            {artworkUrl ? (
               <img 
-                src={track.artwork_url} 
+                src={artworkUrl} 
                 alt={track.title}
                 className="w-full h-full object-cover"
               />
@@ -75,9 +83,9 @@ const NowPlaying: React.FC<NowPlayingProps> = ({
                 por {track.artist}
               </p>
               
-              {track.genre && (
+              {genre && (
                 <Badge variant="secondary" className="mt-2">
-                  {track.genre}
+                  {genre}
                 </Badge>
               )}
             </div>
@@ -102,10 +110,12 @@ const NowPlaying: React.FC<NowPlayingProps> = ({
               <span>{Math.floor(track.duration / 60)}:{(track.duration % 60).toString().padStart(2, '0')}</span>
             </div>
             
-            <div className="flex items-center gap-1">
-              <TrendingUp className="w-4 h-4" />
-              <span>{track.plays_count.toLocaleString()} reproducciones</span>
-            </div>
+            {isUserTrack && (
+              <div className="flex items-center gap-1">
+                <TrendingUp className="w-4 h-4" />
+                <span>{playsCount.toLocaleString()} reproducciones</span>
+              </div>
+            )}
             
             <div className="flex items-center gap-1">
               <Users className="w-4 h-4" />
@@ -114,14 +124,23 @@ const NowPlaying: React.FC<NowPlayingProps> = ({
           </div>
 
           {/* Priority Level */}
-          {track.priority_level > 1 && (
+          {isUserTrack && priorityLevel > 1 && (
             <div className="mt-2">
               <Badge 
                 variant="outline" 
                 className="text-xs border-primary/50 text-primary"
               >
-                Prioridad {track.priority_level}
+                Prioridad {priorityLevel}
               </Badge>
+            </div>
+          )}
+
+          {/* Source Attribution for External Tracks */}
+          {!isUserTrack && 'attribution' in track && track.attribution && (
+            <div className="mt-2">
+              <p className="text-xs text-muted-foreground italic">
+                {track.attribution}
+              </p>
             </div>
           )}
         </div>
