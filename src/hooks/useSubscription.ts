@@ -5,10 +5,13 @@ import { createClient } from '@supabase/supabase-js';
 import { UserSubscription, SubscriptionPlan, BillingInfo, ContentUsage } from '@/types/subscription';
 import { User } from '@/types';
 
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL || '',
-  import.meta.env.VITE_SUPABASE_ANON_KEY || ''
-);
+// Only create Supabase client if environment variables are available
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+const supabase = supabaseUrl && supabaseAnonKey 
+  ? createClient(supabaseUrl, supabaseAnonKey)
+  : null;
 
 export const useSubscription = (user: User | null) => {
   const queryClient = useQueryClient();
@@ -17,7 +20,7 @@ export const useSubscription = (user: User | null) => {
   const { data: subscription, isLoading: subscriptionLoading } = useQuery({
     queryKey: ['subscription', user?.id],
     queryFn: async () => {
-      if (!user) return null;
+      if (!user || !supabase) return null;
       
       const { data, error } = await supabase
         .from('user_subscriptions')
@@ -28,13 +31,15 @@ export const useSubscription = (user: User | null) => {
       if (error && error.code !== 'PGRST116') throw error;
       return data as UserSubscription | null;
     },
-    enabled: !!user,
+    enabled: !!user && !!supabase,
   });
 
   // Get available plans
   const { data: plans } = useQuery({
     queryKey: ['subscription-plans'],
     queryFn: async () => {
+      if (!supabase) return [];
+      
       const { data, error } = await supabase
         .from('subscription_plans')
         .select('*')
@@ -43,13 +48,19 @@ export const useSubscription = (user: User | null) => {
       if (error) throw error;
       return data as SubscriptionPlan[];
     },
+    enabled: !!supabase,
   });
 
   // Get user's content usage
   const { data: usage } = useQuery({
     queryKey: ['content-usage', user?.id],
     queryFn: async () => {
-      if (!user) return null;
+      if (!user || !supabase) return {
+        songs_uploaded: 0,
+        ads_created: 0,
+        storage_used: 0,
+        monthly_plays: 0,
+      } as ContentUsage;
       
       const { data, error } = await supabase
         .from('user_content_usage')
@@ -68,7 +79,7 @@ export const useSubscription = (user: User | null) => {
       }
       return data as ContentUsage;
     },
-    enabled: !!user,
+    enabled: !!user && !!supabase,
   });
 
   // Create checkout session
@@ -78,6 +89,8 @@ export const useSubscription = (user: User | null) => {
       successUrl: string;
       cancelUrl: string;
     }) => {
+      if (!supabase) throw new Error('Supabase not configured');
+      
       const { data, error } = await supabase.functions.invoke('create-checkout', {
         body: { planId, successUrl, cancelUrl }
       });
@@ -94,6 +107,8 @@ export const useSubscription = (user: User | null) => {
   // Cancel subscription
   const cancelSubscriptionMutation = useMutation({
     mutationFn: async () => {
+      if (!supabase) throw new Error('Supabase not configured');
+      
       const { data, error } = await supabase.functions.invoke('cancel-subscription');
       if (error) throw error;
       return data;
@@ -140,7 +155,13 @@ export const useDashboardStats = (user: User | null) => {
   return useQuery({
     queryKey: ['dashboard-stats', user?.id],
     queryFn: async () => {
-      if (!user) return null;
+      if (!user || !supabase) return {
+        total_plays: 0,
+        unique_listeners: 0,
+        avg_listen_time: 0,
+        top_content: [],
+        recent_activity: [],
+      };
       
       const { data, error } = await supabase
         .from('user_dashboard_stats')
@@ -160,6 +181,6 @@ export const useDashboardStats = (user: User | null) => {
       }
       return data;
     },
-    enabled: !!user,
+    enabled: !!user && !!supabase,
   });
 };
