@@ -1,42 +1,12 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { RadioState, Track, Advertisement, DJTalk } from '@/types';
-
-const MOCK_TRACKS: Track[] = [
-  {
-    id: '1',
-    title: 'Neon Dreams',
-    artist: 'Electronic Vibes',
-    artist_id: 'artist1',
-    duration: 180,
-    file_url: '/audio/sample.mp3',
-    artwork_url: '/images/album1.jpg',
-    genre: 'Electronic',
-    plays_count: 1250,
-    priority_level: 3,
-    upload_date: '2024-01-15',
-    status: 'approved'
-  },
-  {
-    id: '2',
-    title: 'Midnight Jazz',
-    artist: 'Smooth Operators',
-    artist_id: 'artist2',
-    duration: 240,
-    file_url: '/audio/sample2.mp3',
-    artwork_url: '/images/album2.jpg',
-    genre: 'Jazz',
-    plays_count: 890,
-    priority_level: 2,
-    upload_date: '2024-01-14',
-    status: 'approved'
-  }
-];
+import { MusicSourceManager, ExternalTrack } from '@/services/MusicSourceManager';
 
 export const useRadio = () => {
   const [radioState, setRadioState] = useState<RadioState>({
     isPlaying: false,
-    currentTrack: MOCK_TRACKS[0],
+    currentTrack: null,
     volume: 0.7,
     progress: 0,
     playlist: [],
@@ -45,7 +15,30 @@ export const useRadio = () => {
   });
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const musicSourceManager = useRef(new MusicSourceManager());
   const currentTrackIndex = useRef(0);
+  const [tracks, setTracks] = useState<ExternalTrack[]>([]);
+
+  // Initialize with real Jamendo tracks
+  useEffect(() => {
+    const loadInitialTracks = async () => {
+      try {
+        const jamendoTracks = await musicSourceManager.current.getExternalTracks(10);
+        setTracks(jamendoTracks);
+        
+        if (jamendoTracks.length > 0) {
+          setRadioState(prev => ({
+            ...prev,
+            currentTrack: jamendoTracks[0]
+          }));
+        }
+      } catch (error) {
+        console.error('Error loading initial tracks:', error);
+      }
+    };
+
+    loadInitialTracks();
+  }, []);
 
   // Initialize audio element
   useEffect(() => {
@@ -90,11 +83,12 @@ export const useRadio = () => {
   }, []);
 
   const play = useCallback(async () => {
-    if (!audioRef.current) return;
+    if (!audioRef.current || !radioState.currentTrack) return;
 
     try {
-      if (radioState.currentTrack && audioRef.current.src !== radioState.currentTrack.file_url) {
-        audioRef.current.src = radioState.currentTrack.file_url;
+      const streamUrl = radioState.currentTrack.stream_url;
+      if (audioRef.current.src !== streamUrl) {
+        audioRef.current.src = streamUrl;
       }
       
       await audioRef.current.play();
@@ -126,26 +120,40 @@ export const useRadio = () => {
     }
   }, []);
 
-  const nextTrack = useCallback(() => {
-    currentTrackIndex.current = (currentTrackIndex.current + 1) % MOCK_TRACKS.length;
-    const nextTrack = MOCK_TRACKS[currentTrackIndex.current];
+  const nextTrack = useCallback(async () => {
+    if (tracks.length === 0) return;
+
+    // Move to next track in the list
+    currentTrackIndex.current = (currentTrackIndex.current + 1) % tracks.length;
+    
+    // If we're near the end, load more tracks
+    if (currentTrackIndex.current >= tracks.length - 2) {
+      try {
+        const moreTracks = await musicSourceManager.current.getExternalTracks(10);
+        setTracks(prev => [...prev, ...moreTracks]);
+      } catch (error) {
+        console.error('Error loading more tracks:', error);
+      }
+    }
+
+    const nextTrack = tracks[currentTrackIndex.current];
     
     setRadioState(prev => ({
       ...prev,
       currentTrack: nextTrack,
-      history: [prev.currentTrack, ...prev.history].filter(Boolean).slice(0, 10) as Track[],
+      history: prev.currentTrack ? [prev.currentTrack, ...prev.history].slice(0, 10) : prev.history,
       progress: 0
     }));
 
     if (radioState.isPlaying && audioRef.current) {
-      audioRef.current.src = nextTrack.file_url;
+      audioRef.current.src = nextTrack.stream_url;
       audioRef.current.play().catch(console.error);
     }
-  }, [radioState.isPlaying]);
+  }, [tracks, radioState.isPlaying]);
 
   const previousTrack = useCallback(() => {
     if (radioState.history.length > 0) {
-      const previousTrack = radioState.history[0] as Track;
+      const previousTrack = radioState.history[0] as ExternalTrack;
       setRadioState(prev => ({
         ...prev,
         currentTrack: previousTrack,
@@ -154,7 +162,7 @@ export const useRadio = () => {
       }));
 
       if (radioState.isPlaying && audioRef.current) {
-        audioRef.current.src = previousTrack.file_url;
+        audioRef.current.src = previousTrack.stream_url;
         audioRef.current.play().catch(console.error);
       }
     }

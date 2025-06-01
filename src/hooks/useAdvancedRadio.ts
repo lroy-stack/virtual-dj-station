@@ -112,10 +112,14 @@ export const useAdvancedRadio = (userTracks: Track[] = [], userTier: string = 'f
     setRadioState(prev => ({ ...prev, isLoading: true }));
     
     try {
-      // Generar cola inicial con tracks de usuario
-      const initialQueue = musicSourceManager.current.generateQueue(userTracks, userTier);
+      // Si hay tracks de usuario, usarlos como base
+      let initialQueue: QueueItem[] = [];
       
-      // Llenar con contenido externo
+      if (userTracks.length > 0) {
+        initialQueue = musicSourceManager.current.generateQueue(userTracks, userTier);
+      }
+      
+      // Llenar con contenido externo (incluso si no hay tracks de usuario)
       const fullQueue = await musicSourceManager.current.fillQueueWithExternal(initialQueue, 20);
       
       setRadioState(prev => ({
