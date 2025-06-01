@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -25,9 +25,10 @@ import { useSubscription } from '@/hooks/useSubscription';
 interface DashboardLayoutProps {
   user: User;
   onLogout: () => void;
+  children: React.ReactNode;
 }
 
-const DashboardLayout: React.FC<DashboardLayoutProps> = ({ user, onLogout }) => {
+const DashboardLayout: React.FC<DashboardLayoutProps> = ({ user, onLogout, children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
@@ -207,7 +208,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ user, onLogout }) => 
 
         {/* Content Area */}
         <main className="flex-1 p-6 overflow-auto">
-          <Outlet />
+          {children}
         </main>
       </div>
     </div>

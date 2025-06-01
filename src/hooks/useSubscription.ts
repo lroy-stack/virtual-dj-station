@@ -6,8 +6,8 @@ import { UserSubscription, SubscriptionPlan, BillingInfo, ContentUsage } from '@
 import { User } from '@/types';
 
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  import.meta.env.VITE_SUPABASE_URL || '',
+  import.meta.env.VITE_SUPABASE_ANON_KEY || ''
 );
 
 export const useSubscription = (user: User | null) => {
