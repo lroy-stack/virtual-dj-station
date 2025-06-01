@@ -1,4 +1,3 @@
-
 import { Track } from '@/types';
 
 export interface ExternalTrack {
@@ -22,7 +21,7 @@ export interface QueueItem {
 }
 
 export class MusicSourceManager {
-  private jamendoClientId = 'demo-client'; // En producción, usar variable de entorno
+  private jamendoClientId = '8ea38398'; // Your Jamendo client ID
   private internetArchiveBase = 'https://archive.org/advancedsearch.php';
   private cache = new Map<string, ExternalTrack[]>();
   private currentSources: ('jamendo' | 'internet_archive')[] = ['jamendo', 'internet_archive'];
@@ -62,34 +61,33 @@ export class MusicSourceManager {
     }
 
     try {
-      // Obtener lista de radios disponibles
-      const radiosResponse = await fetch(
-        `https://api.jamendo.com/v3.0/radios/?client_id=${this.jamendoClientId}&format=json&limit=5`
+      // Get actual tracks from Jamendo API
+      const tracksResponse = await fetch(
+        `https://api.jamendo.com/v3.0/tracks/?client_id=${this.jamendoClientId}&format=json&limit=${count}&order=popularity_total&include=musicinfo&audioformat=mp32`
       );
       
-      if (!radiosResponse.ok) {
-        throw new Error(`Jamendo API error: ${radiosResponse.status}`);
+      if (!tracksResponse.ok) {
+        throw new Error(`Jamendo API error: ${tracksResponse.status}`);
       }
 
-      const radiosData = await radiosResponse.json();
-      const tracks: ExternalTrack[] = [];
-
-      // Simular obtención de tracks de radio (en producción, usar streams reales)
-      for (let i = 0; i < Math.min(count, 10); i++) {
-        const mockTrack: ExternalTrack = {
-          id: `jamendo_${Date.now()}_${i}`,
-          title: `Independent Track ${i + 1}`,
-          artist: `Indie Artist ${i + 1}`,
-          duration: 180 + Math.floor(Math.random() * 120),
-          stream_url: 'https://www.soundjay.com/misc/sounds/bell-ringing-05.wav', // Demo URL
-          artwork_url: `https://picsum.photos/300/300?random=${i}`,
-          genre: ['Electronic', 'Indie', 'Ambient', 'Jazz'][Math.floor(Math.random() * 4)],
-          source: 'jamendo',
-          license: 'Creative Commons',
-          attribution: `Track provided by Jamendo`
-        };
-        tracks.push(mockTrack);
+      const tracksData = await tracksResponse.json();
+      
+      if (tracksData.headers.status !== 'success') {
+        throw new Error(`Jamendo API error: ${tracksData.headers.error_message}`);
       }
+
+      const tracks: ExternalTrack[] = tracksData.results.map((track: any) => ({
+        id: `jamendo_${track.id}`,
+        title: track.name,
+        artist: track.artist_name,
+        duration: parseInt(track.duration),
+        stream_url: track.audio,
+        artwork_url: track.album_image || track.image,
+        genre: track.musicinfo?.tags?.genres?.[0] || 'Unknown',
+        source: 'jamendo' as const,
+        license: 'Creative Commons',
+        attribution: `"${track.name}" by ${track.artist_name} from Jamendo`
+      }));
 
       this.cache.set(cacheKey, tracks);
       return tracks;
