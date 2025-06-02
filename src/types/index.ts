@@ -1,4 +1,3 @@
-
 export interface User {
   id: string;
   email: string;
@@ -89,15 +88,18 @@ export interface AudioVisualizerData {
   volume: number;
 }
 
+// Import ExternalTrack type for RadioState
+import { ExternalTrack } from '@/services/MusicSourceManager';
+
 export interface RadioState {
   isPlaying: boolean;
-  currentTrack?: Track;
+  currentTrack?: Track | ExternalTrack;
   currentAd?: Advertisement;
   currentDJTalk?: DJTalk;
   volume: number;
   progress: number;
   playlist: PlaylistItem[];
-  history: (Track | Advertisement | DJTalk)[];
+  history: (Track | ExternalTrack | Advertisement | DJTalk)[];
   djActive: boolean;
 }
 

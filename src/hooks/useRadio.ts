@@ -82,13 +82,18 @@ export const useRadio = () => {
     };
   }, []);
 
+  // Helper function to get the correct URL for any track type
+  const getTrackUrl = (track: Track | ExternalTrack): string => {
+    return 'file_url' in track ? track.file_url : track.stream_url;
+  };
+
   const play = useCallback(async () => {
     if (!audioRef.current || !radioState.currentTrack) return;
 
     try {
-      const streamUrl = radioState.currentTrack.stream_url;
-      if (audioRef.current.src !== streamUrl) {
-        audioRef.current.src = streamUrl;
+      const trackUrl = getTrackUrl(radioState.currentTrack);
+      if (audioRef.current.src !== trackUrl) {
+        audioRef.current.src = trackUrl;
       }
       
       await audioRef.current.play();
@@ -153,17 +158,22 @@ export const useRadio = () => {
 
   const previousTrack = useCallback(() => {
     if (radioState.history.length > 0) {
-      const previousTrack = radioState.history[0] as ExternalTrack;
-      setRadioState(prev => ({
-        ...prev,
-        currentTrack: previousTrack,
-        history: prev.history.slice(1),
-        progress: 0
-      }));
+      const previousTrack = radioState.history[0];
+      
+      // Type guard to ensure it's a track (not an ad or dj talk)
+      if ('title' in previousTrack && 'artist' in previousTrack) {
+        setRadioState(prev => ({
+          ...prev,
+          currentTrack: previousTrack,
+          history: prev.history.slice(1),
+          progress: 0
+        }));
 
-      if (radioState.isPlaying && audioRef.current) {
-        audioRef.current.src = previousTrack.stream_url;
-        audioRef.current.play().catch(console.error);
+        if (radioState.isPlaying && audioRef.current) {
+          const trackUrl = getTrackUrl(previousTrack);
+          audioRef.current.src = trackUrl;
+          audioRef.current.play().catch(console.error);
+        }
       }
     }
   }, [radioState.history, radioState.isPlaying]);
