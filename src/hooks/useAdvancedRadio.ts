@@ -2,6 +2,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { Track } from '@/types';
 import { MusicSourceManager, QueueItem, ExternalTrack } from '@/services/MusicSourceManager';
+import { useToast } from '@/hooks/use-toast';
 
 export interface AdvancedRadioState {
   isPlaying: boolean;
@@ -15,6 +16,7 @@ export interface AdvancedRadioState {
   crossfadeDuration: number;
   currentSource: 'user' | 'external';
   bufferHealth: number;
+  errorCount: number;
 }
 
 export const useAdvancedRadio = (userTracks: Track[] = [], userTier: string = 'free') => {
@@ -26,20 +28,20 @@ export const useAdvancedRadio = (userTracks: Track[] = [], userTier: string = 'f
     queue: [],
     history: [],
     isLoading: false,
-    crossfadeEnabled: true,
+    crossfadeEnabled: false, // Deshabilitar crossfade inicialmente
     crossfadeDuration: 3000,
-    currentSource: 'user',
-    bufferHealth: 0
+    currentSource: 'external',
+    bufferHealth: 0,
+    errorCount: 0
   });
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const nextAudioRef = useRef<HTMLAudioElement | null>(null);
   const musicSourceManager = useRef(new MusicSourceManager());
   const crossfadeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const currentTrackIndex = useRef(0);
-  const preloadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const { toast } = useToast();
 
-  // Inicializar reproductor
   useEffect(() => {
     initializePlayer();
     initializeQueue();
@@ -53,17 +55,16 @@ export const useAdvancedRadio = (userTracks: Track[] = [], userTier: string = 'f
     // Audio principal
     audioRef.current = new Audio();
     audioRef.current.volume = radioState.volume;
-    audioRef.current.crossOrigin = 'anonymous';
+    // Remover crossOrigin que causa problemas
     
     // Audio para crossfade
     nextAudioRef.current = new Audio();
     nextAudioRef.current.volume = 0;
-    nextAudioRef.current.crossOrigin = 'anonymous';
 
     const audio = audioRef.current;
     
     const handleTimeUpdate = () => {
-      if (audio.duration) {
+      if (audio.duration && !isNaN(audio.duration)) {
         const newProgress = (audio.currentTime / audio.duration) * 100;
         setRadioState(prev => ({
           ...prev,
@@ -82,23 +83,64 @@ export const useAdvancedRadio = (userTracks: Track[] = [], userTier: string = 'f
     };
 
     const handleEnded = () => {
+      console.log('Track ended, moving to next');
       nextTrack();
     };
 
     const handleLoadStart = () => {
+      console.log('Audio loading started');
       setRadioState(prev => ({ ...prev, isLoading: true }));
     };
 
     const handleCanPlay = () => {
-      setRadioState(prev => ({ ...prev, isLoading: false }));
+      console.log('Audio ready to play');
+      setRadioState(prev => ({ 
+        ...prev, 
+        isLoading: false,
+        errorCount: 0 // Reset error count on successful load
+      }));
       preloadNextTrack();
     };
 
     const handleError = (error: Event) => {
-      console.error('Audio playback error:', error);
-      setRadioState(prev => ({ ...prev, isLoading: false }));
-      // Intentar siguiente pista automáticamente
-      setTimeout(() => nextTrack(), 1000);
+      const audioError = (error.target as HTMLAudioElement)?.error;
+      console.error('Audio playback error:', {
+        error: audioError,
+        code: audioError?.code,
+        message: audioError?.message,
+        currentSrc: audio.src,
+        currentTrack: radioState.currentTrack?.title
+      });
+      
+      setRadioState(prev => ({ 
+        ...prev, 
+        isLoading: false,
+        errorCount: prev.errorCount + 1
+      }));
+
+      // Evitar loop infinito de errores
+      if (radioState.errorCount < 3) {
+        console.log(`Retrying next track (attempt ${radioState.errorCount + 1}/3)`);
+        retryTimeoutRef.current = setTimeout(() => {
+          nextTrack();
+        }, 2000);
+      } else {
+        console.error('Too many consecutive errors, stopping playback');
+        toast({
+          title: "Error de reproducción",
+          description: "Problema al cargar la música. Verificando fuentes...",
+          variant: "destructive"
+        });
+        setRadioState(prev => ({ 
+          ...prev, 
+          isPlaying: false,
+          errorCount: 0
+        }));
+      }
+    };
+
+    const handleLoadedData = () => {
+      console.log('Audio data loaded successfully');
     };
 
     audio.addEventListener('timeupdate', handleTimeUpdate);
@@ -106,37 +148,55 @@ export const useAdvancedRadio = (userTracks: Track[] = [], userTier: string = 'f
     audio.addEventListener('loadstart', handleLoadStart);
     audio.addEventListener('canplay', handleCanPlay);
     audio.addEventListener('error', handleError);
+    audio.addEventListener('loadeddata', handleLoadedData);
   };
 
   const initializeQueue = async () => {
+    console.log('Initializing queue...');
     setRadioState(prev => ({ ...prev, isLoading: true }));
     
     try {
-      // Si hay tracks de usuario, usarlos como base
       let initialQueue: QueueItem[] = [];
       
       if (userTracks.length > 0) {
+        console.log(`Adding ${userTracks.length} user tracks to queue`);
         initialQueue = musicSourceManager.current.generateQueue(userTracks, userTier);
       }
       
-      // Llenar con contenido externo (incluso si no hay tracks de usuario)
+      console.log('Filling queue with external content...');
       const fullQueue = await musicSourceManager.current.fillQueueWithExternal(initialQueue, 20);
+      
+      if (fullQueue.length === 0) {
+        throw new Error('No tracks available in queue');
+      }
+
+      console.log(`Queue initialized with ${fullQueue.length} tracks`);
       
       setRadioState(prev => ({
         ...prev,
         queue: fullQueue,
         currentTrack: fullQueue[0]?.track,
         currentSource: fullQueue[0]?.source || 'external',
-        isLoading: false
+        isLoading: false,
+        errorCount: 0
       }));
 
-      // Cargar primera pista
       if (fullQueue[0]?.track) {
         loadTrack(fullQueue[0].track);
       }
     } catch (error) {
       console.error('Error initializing queue:', error);
+      toast({
+        title: "Error de inicialización",
+        description: "No se pudo cargar la música. Reintentando...",
+        variant: "destructive"
+      });
       setRadioState(prev => ({ ...prev, isLoading: false }));
+      
+      // Reintentar después de 5 segundos
+      setTimeout(() => {
+        initializeQueue();
+      }, 5000);
     }
   };
 
@@ -144,6 +204,15 @@ export const useAdvancedRadio = (userTracks: Track[] = [], userTier: string = 'f
     if (!audioRef.current) return;
 
     const url = 'file_url' in track ? track.file_url : track.stream_url;
+    console.log(`Loading track: "${track.title}" by ${track.artist}`);
+    console.log(`URL: ${url}`);
+    
+    // Clear any pending retry
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current);
+      retryTimeoutRef.current = null;
+    }
+    
     audioRef.current.src = url;
     
     setRadioState(prev => ({
@@ -155,15 +224,15 @@ export const useAdvancedRadio = (userTracks: Track[] = [], userTier: string = 'f
   };
 
   const preloadNextTrack = () => {
-    if (!nextAudioRef.current || radioState.queue.length < 2) return;
+    if (!radioState.crossfadeEnabled || !nextAudioRef.current || radioState.queue.length < 2) return;
 
     const nextTrack = radioState.queue[1]?.track;
     if (nextTrack) {
       const url = 'file_url' in nextTrack ? nextTrack.file_url : nextTrack.stream_url;
+      console.log(`Preloading next track: ${nextTrack.title}`);
       nextAudioRef.current.src = url;
       nextAudioRef.current.load();
       
-      // Marcar como precargado
       setRadioState(prev => ({
         ...prev,
         queue: prev.queue.map((item, index) => 
@@ -181,7 +250,6 @@ export const useAdvancedRadio = (userTracks: Track[] = [], userTier: string = 'f
     const stepTime = fadeTime / steps;
     let step = 0;
 
-    // Iniciar reproducción de la siguiente pista
     nextAudioRef.current.currentTime = 0;
     nextAudioRef.current.play().catch(console.error);
 
@@ -191,18 +259,15 @@ export const useAdvancedRadio = (userTracks: Track[] = [], userTier: string = 'f
       step++;
       const progress = step / steps;
       
-      // Fade out audio actual, fade in siguiente
       audioRef.current.volume = radioState.volume * (1 - progress);
       nextAudioRef.current.volume = radioState.volume * progress;
 
       if (step >= steps) {
-        // Completar transición
         if (crossfadeTimeoutRef.current) {
           clearInterval(crossfadeTimeoutRef.current);
           crossfadeTimeoutRef.current = null;
         }
         
-        // Intercambiar referencias de audio
         const temp = audioRef.current;
         audioRef.current = nextAudioRef.current;
         nextAudioRef.current = temp;
@@ -216,18 +281,28 @@ export const useAdvancedRadio = (userTracks: Track[] = [], userTier: string = 'f
   };
 
   const play = useCallback(async () => {
-    if (!audioRef.current) return;
+    if (!audioRef.current || !radioState.currentTrack) {
+      console.warn('Cannot play: no audio element or current track');
+      return;
+    }
 
     try {
+      console.log('Starting playback...');
       await audioRef.current.play();
       setRadioState(prev => ({ ...prev, isPlaying: true }));
     } catch (error) {
-      console.error('Error playing audio:', error);
+      console.error('Error starting playback:', error);
+      toast({
+        title: "Error de reproducción",
+        description: "No se pudo iniciar la reproducción",
+        variant: "destructive"
+      });
     }
-  }, []);
+  }, [radioState.currentTrack, toast]);
 
   const pause = useCallback(() => {
     if (audioRef.current) {
+      console.log('Pausing playback');
       audioRef.current.pause();
       setRadioState(prev => ({ ...prev, isPlaying: false }));
     }
@@ -249,6 +324,7 @@ export const useAdvancedRadio = (userTracks: Track[] = [], userTier: string = 'f
   }, []);
 
   const nextTrack = useCallback(() => {
+    console.log('Moving to next track...');
     if (radioState.crossfadeEnabled && nextAudioRef.current?.readyState >= 2) {
       startCrossfade();
     } else {
@@ -257,7 +333,6 @@ export const useAdvancedRadio = (userTracks: Track[] = [], userTier: string = 'f
   }, [radioState.crossfadeEnabled]);
 
   const nextTrackInQueue = async () => {
-    // Mover pista actual al historial
     if (radioState.currentTrack) {
       setRadioState(prev => ({
         ...prev,
@@ -265,12 +340,11 @@ export const useAdvancedRadio = (userTracks: Track[] = [], userTier: string = 'f
       }));
     }
 
-    // Remover primera pista de la cola
     const newQueue = radioState.queue.slice(1);
     
-    // Llenar cola si está baja
     let updatedQueue = newQueue;
     if (newQueue.length < 5) {
+      console.log('Queue running low, refilling...');
       try {
         updatedQueue = await musicSourceManager.current.fillQueueWithExternal(newQueue, 20);
       } catch (error) {
@@ -281,15 +355,18 @@ export const useAdvancedRadio = (userTracks: Track[] = [], userTier: string = 'f
     setRadioState(prev => ({
       ...prev,
       queue: updatedQueue,
-      progress: 0
+      progress: 0,
+      errorCount: 0 // Reset error count when manually moving to next track
     }));
 
-    // Cargar siguiente pista
     if (updatedQueue[0]?.track) {
       loadTrack(updatedQueue[0].track);
       
       if (radioState.isPlaying && audioRef.current) {
-        audioRef.current.play().catch(console.error);
+        // Add small delay to ensure track is loaded
+        setTimeout(() => {
+          audioRef.current?.play().catch(console.error);
+        }, 100);
       }
     }
   };
@@ -302,13 +379,16 @@ export const useAdvancedRadio = (userTracks: Track[] = [], userTier: string = 'f
         ...prev,
         currentTrack: previousTrack,
         history: prev.history.slice(1),
-        progress: 0
+        progress: 0,
+        errorCount: 0
       }));
 
       loadTrack(previousTrack);
       
       if (radioState.isPlaying && audioRef.current) {
-        audioRef.current.play().catch(console.error);
+        setTimeout(() => {
+          audioRef.current?.play().catch(console.error);
+        }, 100);
       }
     }
   }, [radioState.history, radioState.isPlaying]);
@@ -322,14 +402,17 @@ export const useAdvancedRadio = (userTracks: Track[] = [], userTier: string = 'f
         ...prev,
         queue: newQueue,
         history: [...skippedTracks.map(item => item.track), ...prev.history].slice(0, 20),
-        progress: 0
+        progress: 0,
+        errorCount: 0
       }));
 
       if (newQueue[0]?.track) {
         loadTrack(newQueue[0].track);
         
         if (radioState.isPlaying && audioRef.current) {
-          audioRef.current.play().catch(console.error);
+          setTimeout(() => {
+            audioRef.current?.play().catch(console.error);
+          }, 100);
         }
       }
     }
@@ -353,8 +436,8 @@ export const useAdvancedRadio = (userTracks: Track[] = [], userTier: string = 'f
     if (crossfadeTimeoutRef.current) {
       clearInterval(crossfadeTimeoutRef.current);
     }
-    if (preloadTimeoutRef.current) {
-      clearTimeout(preloadTimeoutRef.current);
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current);
     }
     if (audioRef.current) {
       audioRef.current.pause();

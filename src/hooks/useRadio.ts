@@ -2,6 +2,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { RadioState, Track, Advertisement, DJTalk } from '@/types';
 import { MusicSourceManager, ExternalTrack } from '@/services/MusicSourceManager';
+import { useToast } from '@/hooks/use-toast';
 
 export const useRadio = () => {
   const [radioState, setRadioState] = useState<RadioState>({
@@ -18,12 +19,15 @@ export const useRadio = () => {
   const musicSourceManager = useRef(new MusicSourceManager());
   const currentTrackIndex = useRef(0);
   const [tracks, setTracks] = useState<ExternalTrack[]>([]);
+  const { toast } = useToast();
 
   // Initialize with real Jamendo tracks
   useEffect(() => {
     const loadInitialTracks = async () => {
       try {
-        const jamendoTracks = await musicSourceManager.current.getExternalTracks(10);
+        console.log('Loading initial tracks from Jamendo...');
+        const jamendoTracks = await musicSourceManager.current.getExternalTracks(15);
+        console.log(`Loaded ${jamendoTracks.length} tracks from Jamendo`);
         setTracks(jamendoTracks);
         
         if (jamendoTracks.length > 0) {
@@ -31,14 +35,20 @@ export const useRadio = () => {
             ...prev,
             currentTrack: jamendoTracks[0]
           }));
+          console.log(`Current track set to: ${jamendoTracks[0].title}`);
         }
       } catch (error) {
         console.error('Error loading initial tracks:', error);
+        toast({
+          title: "Error de carga",
+          description: "No se pudieron cargar las canciones iniciales",
+          variant: "destructive"
+        });
       }
     };
 
     loadInitialTracks();
-  }, []);
+  }, [toast]);
 
   // Initialize audio element
   useEffect(() => {
@@ -48,7 +58,7 @@ export const useRadio = () => {
     const audio = audioRef.current;
     
     const handleTimeUpdate = () => {
-      if (audio.duration) {
+      if (audio.duration && !isNaN(audio.duration)) {
         setRadioState(prev => ({
           ...prev,
           progress: (audio.currentTime / audio.duration) * 100
@@ -57,6 +67,7 @@ export const useRadio = () => {
     };
 
     const handleEnded = () => {
+      console.log('Track ended, moving to next');
       nextTrack();
     };
 
@@ -68,16 +79,33 @@ export const useRadio = () => {
       console.log('Audio ready to play');
     };
 
+    const handleError = (error: Event) => {
+      const audioError = (error.target as HTMLAudioElement)?.error;
+      console.error('Audio playback error:', {
+        error: audioError,
+        code: audioError?.code,
+        message: audioError?.message,
+        currentSrc: audio.src
+      });
+      
+      // Move to next track on error
+      setTimeout(() => {
+        nextTrack();
+      }, 1000);
+    };
+
     audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('ended', handleEnded);
     audio.addEventListener('loadstart', handleLoadStart);
     audio.addEventListener('canplay', handleCanPlay);
+    audio.addEventListener('error', handleError);
 
     return () => {
       audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('ended', handleEnded);
       audio.removeEventListener('loadstart', handleLoadStart);
       audio.removeEventListener('canplay', handleCanPlay);
+      audio.removeEventListener('error', handleError);
       audio.pause();
     };
   }, []);
@@ -93,15 +121,22 @@ export const useRadio = () => {
     try {
       const trackUrl = getTrackUrl(radioState.currentTrack);
       if (audioRef.current.src !== trackUrl) {
+        console.log(`Loading new track URL: ${trackUrl}`);
         audioRef.current.src = trackUrl;
       }
       
+      console.log('Starting playback...');
       await audioRef.current.play();
       setRadioState(prev => ({ ...prev, isPlaying: true }));
     } catch (error) {
       console.error('Error playing audio:', error);
+      toast({
+        title: "Error de reproducción",
+        description: "No se pudo reproducir la canción actual",
+        variant: "destructive"
+      });
     }
-  }, [radioState.currentTrack]);
+  }, [radioState.currentTrack, toast]);
 
   const pause = useCallback(() => {
     if (audioRef.current) {
@@ -134,8 +169,10 @@ export const useRadio = () => {
     // If we're near the end, load more tracks
     if (currentTrackIndex.current >= tracks.length - 2) {
       try {
+        console.log('Loading more tracks...');
         const moreTracks = await musicSourceManager.current.getExternalTracks(10);
         setTracks(prev => [...prev, ...moreTracks]);
+        console.log(`Added ${moreTracks.length} more tracks`);
       } catch (error) {
         console.error('Error loading more tracks:', error);
       }
@@ -150,9 +187,13 @@ export const useRadio = () => {
       progress: 0
     }));
 
+    console.log(`Next track: ${nextTrack.title} by ${nextTrack.artist}`);
+
     if (radioState.isPlaying && audioRef.current) {
       audioRef.current.src = nextTrack.stream_url;
-      audioRef.current.play().catch(console.error);
+      setTimeout(() => {
+        audioRef.current?.play().catch(console.error);
+      }, 100);
     }
   }, [tracks, radioState.isPlaying]);
 
@@ -172,7 +213,9 @@ export const useRadio = () => {
         if (radioState.isPlaying && audioRef.current) {
           const trackUrl = getTrackUrl(previousTrack);
           audioRef.current.src = trackUrl;
-          audioRef.current.play().catch(console.error);
+          setTimeout(() => {
+            audioRef.current?.play().catch(console.error);
+          }, 100);
         }
       }
     }
