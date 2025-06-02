@@ -1,8 +1,7 @@
-
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { Track } from '@/types';
 import { MusicSourceManager, QueueItem, ExternalTrack } from '@/services/MusicSourceManager';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 
 export interface AdvancedRadioState {
   isPlaying: boolean;
@@ -28,7 +27,7 @@ export const useAdvancedRadio = (userTracks: Track[] = [], userTier: string = 'f
     queue: [],
     history: [],
     isLoading: false,
-    crossfadeEnabled: false, // Deshabilitar crossfade inicialmente
+    crossfadeEnabled: false,
     crossfadeDuration: 3000,
     currentSource: 'external',
     bufferHealth: 0,
@@ -40,7 +39,6 @@ export const useAdvancedRadio = (userTracks: Track[] = [], userTier: string = 'f
   const musicSourceManager = useRef(new MusicSourceManager());
   const crossfadeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const { toast } = useToast();
 
   useEffect(() => {
     initializePlayer();
@@ -55,7 +53,6 @@ export const useAdvancedRadio = (userTracks: Track[] = [], userTier: string = 'f
     // Audio principal
     audioRef.current = new Audio();
     audioRef.current.volume = radioState.volume;
-    // Remover crossOrigin que causa problemas
     
     // Audio para crossfade
     nextAudioRef.current = new Audio();
@@ -97,7 +94,7 @@ export const useAdvancedRadio = (userTracks: Track[] = [], userTier: string = 'f
       setRadioState(prev => ({ 
         ...prev, 
         isLoading: false,
-        errorCount: 0 // Reset error count on successful load
+        errorCount: 0
       }));
       preloadNextTrack();
     };
@@ -118,6 +115,11 @@ export const useAdvancedRadio = (userTracks: Track[] = [], userTier: string = 'f
         errorCount: prev.errorCount + 1
       }));
 
+      // Show user-friendly error message
+      toast.error("Error de reproducción", {
+        description: "Problema al cargar la música. Cambiando a la siguiente canción...",
+      });
+
       // Evitar loop infinito de errores
       if (radioState.errorCount < 3) {
         console.log(`Retrying next track (attempt ${radioState.errorCount + 1}/3)`);
@@ -126,16 +128,19 @@ export const useAdvancedRadio = (userTracks: Track[] = [], userTier: string = 'f
         }, 2000);
       } else {
         console.error('Too many consecutive errors, stopping playback');
-        toast({
-          title: "Error de reproducción",
-          description: "Problema al cargar la música. Verificando fuentes...",
-          variant: "destructive"
+        toast.error("Error persistente", {
+          description: "Múltiples errores de reproducción. Reiniciando sistema...",
         });
         setRadioState(prev => ({ 
           ...prev, 
           isPlaying: false,
           errorCount: 0
         }));
+        
+        // Restart with fresh content
+        setTimeout(() => {
+          initializeQueue();
+        }, 3000);
       }
     };
 
@@ -171,6 +176,7 @@ export const useAdvancedRadio = (userTracks: Track[] = [], userTier: string = 'f
       }
 
       console.log(`Queue initialized with ${fullQueue.length} tracks`);
+      console.log('First track in queue:', fullQueue[0]?.track);
       
       setRadioState(prev => ({
         ...prev,
@@ -184,12 +190,16 @@ export const useAdvancedRadio = (userTracks: Track[] = [], userTier: string = 'f
       if (fullQueue[0]?.track) {
         loadTrack(fullQueue[0].track);
       }
+
+      // Show success message
+      toast.success("Música cargada", {
+        description: `${fullQueue.length} canciones disponibles`,
+      });
+
     } catch (error) {
       console.error('Error initializing queue:', error);
-      toast({
-        title: "Error de inicialización",
+      toast.error("Error de inicialización", {
         description: "No se pudo cargar la música. Reintentando...",
-        variant: "destructive"
       });
       setRadioState(prev => ({ ...prev, isLoading: false }));
       
@@ -292,13 +302,11 @@ export const useAdvancedRadio = (userTracks: Track[] = [], userTier: string = 'f
       setRadioState(prev => ({ ...prev, isPlaying: true }));
     } catch (error) {
       console.error('Error starting playback:', error);
-      toast({
-        title: "Error de reproducción",
+      toast.error("Error de reproducción", {
         description: "No se pudo iniciar la reproducción",
-        variant: "destructive"
       });
     }
-  }, [radioState.currentTrack, toast]);
+  }, [radioState.currentTrack]);
 
   const pause = useCallback(() => {
     if (audioRef.current) {
@@ -356,14 +364,13 @@ export const useAdvancedRadio = (userTracks: Track[] = [], userTier: string = 'f
       ...prev,
       queue: updatedQueue,
       progress: 0,
-      errorCount: 0 // Reset error count when manually moving to next track
+      errorCount: 0
     }));
 
     if (updatedQueue[0]?.track) {
       loadTrack(updatedQueue[0].track);
       
       if (radioState.isPlaying && audioRef.current) {
-        // Add small delay to ensure track is loaded
         setTimeout(() => {
           audioRef.current?.play().catch(console.error);
         }, 100);
