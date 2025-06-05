@@ -47,6 +47,7 @@ export const useAdvancedRadio = (userTracks: Track[] = [], userTier: string = 'f
   const musicSourceManager = useRef(new MusicSourceManager());
   const crossfadeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const handlersRef = useRef<{ [key: string]: (e: Event) => void }>({});
 
   useEffect(() => {
     initializePlayer();
@@ -160,6 +161,15 @@ export const useAdvancedRadio = (userTracks: Track[] = [], userTier: string = 'f
 
     const handleLoadedData = () => {
       console.log('Audio data loaded successfully');
+    };
+
+    handlersRef.current = {
+      timeupdate: handleTimeUpdate,
+      ended: handleEnded,
+      loadstart: handleLoadStart,
+      canplay: handleCanPlay,
+      error: handleError,
+      loadeddata: handleLoadedData,
     };
 
     audio.addEventListener('timeupdate', handleTimeUpdate);
@@ -530,6 +540,10 @@ export const useAdvancedRadio = (userTracks: Track[] = [], userTier: string = 'f
       clearTimeout(retryTimeoutRef.current);
     }
     if (audioRef.current) {
+      const handlers = handlersRef.current;
+      Object.entries(handlers).forEach(([event, fn]) => {
+        audioRef.current?.removeEventListener(event, fn);
+      });
       audioRef.current.pause();
     }
     if (nextAudioRef.current) {
