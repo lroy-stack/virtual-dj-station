@@ -2,12 +2,13 @@
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Minimize2, Maximize2, Settings, Mic, MicOff } from 'lucide-react';
+import { Minimize2, Maximize2, Settings, Mic, MicOff, MessageSquare, Volume2 } from 'lucide-react';
 import HostAvatar from './HostAvatar';
 import ChatInterface from './ChatInterface';
 import VoiceController from './VoiceController';
 import ContentManager from './ContentManager';
 import { AIHostState, HostMode, ContentItem } from '@/types/aihost';
+import { useRadioContext } from '@/contexts/RadioContext';
 
 interface AIHostProps {
   mode?: HostMode;
@@ -15,6 +16,9 @@ interface AIHostProps {
   isMinimized?: boolean;
   onToggleMinimize?: () => void;
   currentTrack?: any;
+  djState?: AIHostState;
+  onToggleDJ?: () => void;
+  onCustomAnnouncement?: (message: string) => void;
 }
 
 const AIHost: React.FC<AIHostProps> = ({
@@ -22,9 +26,17 @@ const AIHost: React.FC<AIHostProps> = ({
   onModeChange,
   isMinimized = false,
   onToggleMinimize,
-  currentTrack
+  currentTrack,
+  djState,
+  onToggleDJ,
+  onCustomAnnouncement
 }) => {
-  const [hostState, setHostState] = useState<AIHostState>({
+  const { state: radioState } = useRadioContext();
+  const [showSettings, setShowSettings] = useState(false);
+  const [customMessage, setCustomMessage] = useState('');
+
+  // Use the synced DJ state if provided, otherwise use local state
+  const [localHostState, setLocalHostState] = useState<AIHostState>({
     isActive: false,
     isSpeaking: false,
     isListening: false,
@@ -34,99 +46,22 @@ const AIHost: React.FC<AIHostProps> = ({
     energy: 50
   });
 
+  const hostState = djState || localHostState;
+
   const [contentQueue, setContentQueue] = useState<ContentItem[]>([]);
-  const [showSettings, setShowSettings] = useState(false);
 
-  // Simulate host activity based on music state
-  useEffect(() => {
-    if (currentTrack) {
-      // Simulate song introduction
-      const introContent: ContentItem = {
-        id: `intro-${currentTrack.id}`,
-        type: 'song_intro',
-        content: `¡Excelente! Ahora suena "${currentTrack.title}" de ${currentTrack.artist}. ${getSongContext(currentTrack)}`,
-        duration: 8000,
-        priority: 'high'
-      };
-      
-      setContentQueue(prev => [introContent, ...prev]);
+  const handleSendCustomMessage = () => {
+    if (customMessage.trim() && onCustomAnnouncement) {
+      onCustomAnnouncement(customMessage.trim());
+      setCustomMessage('');
     }
-  }, [currentTrack]);
-
-  const getSongContext = (track: any) => {
-    const contexts = [
-      'Una verdadera joya musical que no puedes perderte.',
-      'Este artista independiente está revolucionando su género.',
-      'Perfecta para este momento del día.',
-      'Una canción que conecta directamente con el alma.',
-      'El ritmo que necesitabas escuchar hoy.'
-    ];
-    return contexts[Math.floor(Math.random() * contexts.length)];
-  };
-
-  const toggleHostActivity = () => {
-    setHostState(prev => ({
-      ...prev,
-      isActive: !prev.isActive,
-      isListening: !prev.isActive
-    }));
   };
 
   const handleNewMessage = (message: string) => {
-    // Add user message to queue for host response
-    const responseContent: ContentItem = {
-      id: `response-${Date.now()}`,
-      type: 'user_response',
-      content: generateResponse(message),
-      duration: 5000,
-      priority: 'medium'
-    };
-    
-    setContentQueue(prev => [...prev, responseContent]);
-    setHostState(prev => ({ ...prev, isThinking: true }));
-    
-    // Simulate thinking time
-    setTimeout(() => {
-      setHostState(prev => ({ ...prev, isThinking: false, isSpeaking: true }));
-    }, 1500);
-  };
-
-  const generateResponse = (message: string): string => {
-    const responses = [
-      '¡Qué gran pregunta! Me encanta interactuar con oyentes como tú.',
-      'Interesante punto de vista. La música realmente conecta a las personas.',
-      'Gracias por escribir. Es genial saber que estás disfrutando la transmisión.',
-      'Me alegra que estés aquí en Radio IA. ¿Hay algún género que te gustaría escuchar?',
-      'La música tiene el poder de transformar nuestro día, ¿no crees?'
-    ];
-    return responses[Math.floor(Math.random() * responses.length)];
-  };
-
-  const processContentQueue = () => {
-    if (contentQueue.length > 0 && !hostState.isSpeaking) {
-      const nextContent = contentQueue[0];
-      setHostState(prev => ({
-        ...prev,
-        currentContent: nextContent,
-        isSpeaking: true
-      }));
-      
-      // Simulate speaking duration
-      setTimeout(() => {
-        setHostState(prev => ({
-          ...prev,
-          isSpeaking: false,
-          currentContent: null
-        }));
-        setContentQueue(prev => prev.slice(1));
-      }, nextContent.duration);
+    if (onCustomAnnouncement) {
+      onCustomAnnouncement(`Respuesta del locutor: ${message}`);
     }
   };
-
-  useEffect(() => {
-    const interval = setInterval(processContentQueue, 1000);
-    return () => clearInterval(interval);
-  }, [contentQueue, hostState.isSpeaking]);
 
   if (isMinimized) {
     return (
@@ -159,7 +94,7 @@ const AIHost: React.FC<AIHostProps> = ({
             <Button
               variant="ghost"
               size="sm"
-              onClick={toggleHostActivity}
+              onClick={onToggleDJ}
               className={`${hostState.isActive ? 'text-green-500' : 'text-muted-foreground'}`}
             >
               {hostState.isActive ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
@@ -176,6 +111,14 @@ const AIHost: React.FC<AIHostProps> = ({
         </div>
         
         <div className="flex items-center space-x-1">
+          {/* DJ Volume Control */}
+          {hostState.isActive && (
+            <div className="flex items-center space-x-1 mr-2">
+              <Volume2 className="w-3 h-3 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">DJ: {Math.round(radioState.djVolume * 100)}%</span>
+            </div>
+          )}
+          
           <Button
             variant="ghost"
             size="sm"
@@ -195,6 +138,33 @@ const AIHost: React.FC<AIHostProps> = ({
         </div>
       </div>
 
+      {/* Sync Status Bar */}
+      <div className="px-4 py-2 bg-accent/30 border-b border-border/30">
+        <div className="flex items-center justify-between text-xs">
+          <div className="flex items-center space-x-4">
+            <span className="text-muted-foreground">
+              Estado: {radioState.isPlaying ? '▶️ Reproduciendo' : '⏸️ Pausado'}
+            </span>
+            {radioState.currentTrack && (
+              <span className="text-muted-foreground truncate max-w-48">
+                🎵 {radioState.currentTrack.title} - {radioState.currentTrack.artist}
+              </span>
+            )}
+            <span className="text-muted-foreground">
+              📻 {radioState.queue.length} en cola
+            </span>
+          </div>
+          <div className="flex items-center space-x-2">
+            {hostState.isActive && (
+              <div className={`w-2 h-2 rounded-full ${hostState.isSpeaking ? 'bg-red-500 animate-pulse' : 'bg-green-500'}`} />
+            )}
+            <span className="text-muted-foreground">
+              {hostState.isActive ? 'Sincronizado' : 'Desconectado'}
+            </span>
+          </div>
+        </div>
+      </div>
+
       {/* Main Content */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-4">
         {/* Avatar & Voice Controller */}
@@ -210,8 +180,32 @@ const AIHost: React.FC<AIHostProps> = ({
             isActive={hostState.isActive}
             isSpeaking={hostState.isSpeaking}
             currentContent={hostState.currentContent}
-            onToggleActivity={toggleHostActivity}
+            onToggleActivity={onToggleDJ}
           />
+
+          {/* Custom Message Input */}
+          {hostState.isActive && onCustomAnnouncement && (
+            <div className="p-3 bg-accent/30 rounded-lg space-y-2">
+              <label className="text-sm font-medium">Anuncio personalizado:</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={customMessage}
+                  onChange={(e) => setCustomMessage(e.target.value)}
+                  placeholder="Escribe un mensaje para que anuncie el DJ..."
+                  className="flex-1 px-3 py-2 text-sm bg-background border border-border rounded-md"
+                  onKeyPress={(e) => e.key === 'Enter' && handleSendCustomMessage()}
+                />
+                <Button
+                  size="sm"
+                  onClick={handleSendCustomMessage}
+                  disabled={!customMessage.trim()}
+                >
+                  <MessageSquare className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Chat Interface */}
@@ -231,6 +225,19 @@ const AIHost: React.FC<AIHostProps> = ({
           )}
         </div>
       </div>
+
+      {/* Current Content Display */}
+      {hostState.currentContent && (
+        <div className="px-4 pb-4">
+          <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-primary">🎙️ En vivo ahora:</span>
+              <span className="text-xs text-muted-foreground">{hostState.currentContent.type}</span>
+            </div>
+            <p className="text-sm">{hostState.currentContent.content}</p>
+          </div>
+        </div>
+      )}
     </Card>
   );
 };

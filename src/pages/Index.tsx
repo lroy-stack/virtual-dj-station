@@ -1,4 +1,3 @@
-
 import { useQuery } from "@tanstack/react-query";
 import Navigation from "@/components/layout/Navigation";
 import AdvancedAudioPlayer from "@/components/radio/AdvancedAudioPlayer";
@@ -9,10 +8,12 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Play, Users, Radio, Zap, Crown, Music } from "lucide-react";
-import { useAdvancedRadio } from "@/hooks/useAdvancedRadio";
+import { RadioProvider } from "@/contexts/RadioContext";
+import { useSyncedRadio } from "@/hooks/useSyncedRadio";
+import { useSyncedDJ } from "@/hooks/useSyncedDJ";
 import { useState } from "react";
 
-const Index = () => {
+const RadioContent = () => {
   const [isHostMinimized, setIsHostMinimized] = useState(false);
   const [user] = useState(null); // TODO: Replace with actual auth state
 
@@ -37,8 +38,11 @@ const Index = () => {
   const { 
     radioState, 
     togglePlay, 
-    skipToQueueItem 
-  } = useAdvancedRadio(userTracks, user?.subscription_tier || 'free');
+    skipToQueueItem,
+    contextState
+  } = useSyncedRadio(userTracks, user?.subscription_tier || 'free');
+
+  const { djState, toggleDJActive, addCustomAnnouncement } = useSyncedDJ();
 
   const handleLogout = () => {
     console.log('Logout');
@@ -50,35 +54,6 @@ const Index = () => {
     artistsActive: 34
   };
 
-  const recentTracks = [
-    {
-      id: '1',
-      title: 'Midnight Dreams',
-      artist: 'Luna Rodriguez',
-      artist_id: 'artist1',
-      duration: 240,
-      file_url: '/audio/sample1.mp3',
-      genre: 'Indie Pop',
-      plays_count: 892,
-      priority_level: 2,
-      upload_date: '2024-01-15',
-      status: 'approved' as const
-    },
-    {
-      id: '2',
-      title: 'Electric Pulse',
-      artist: 'Neon Collective',
-      artist_id: 'artist2',
-      duration: 185,
-      file_url: '/audio/sample2.mp3',
-      genre: 'Electronic',
-      plays_count: 1340,
-      priority_level: 1,
-      upload_date: '2024-01-14',
-      status: 'approved' as const
-    }
-  ];
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/10">
       <Navigation user={user} onLogout={handleLogout} />
@@ -87,8 +62,8 @@ const Index = () => {
         {/* Hero Section */}
         <section className="text-center space-y-6">
           <div className="space-y-4">
-            <Badge variant="outline" className="text-primary border-primary/50">
-              🎙️ Locutor IA en vivo
+            <Badge variant="outline" className={`text-primary border-primary/50 ${djState.isActive ? 'animate-pulse' : ''}`}>
+              🎙️ Locutor IA {djState.isActive ? 'en vivo' : 'inactivo'}
             </Badge>
             <h1 className="text-4xl md:text-6xl font-bold">
               <span className="text-gradient">Radio IA</span>
@@ -129,6 +104,12 @@ const Index = () => {
               <Radio className="w-4 h-4" />
               <span>{stats.artistsActive} artistas activos</span>
             </div>
+            {djState.isSpeaking && (
+              <div className="flex items-center gap-1 text-primary animate-pulse">
+                <Zap className="w-4 h-4" />
+                <span>DJ hablando</span>
+              </div>
+            )}
           </div>
         </section>
 
@@ -156,6 +137,9 @@ const Index = () => {
               currentTrack={radioState.currentTrack}
               isMinimized={isHostMinimized}
               onToggleMinimize={() => setIsHostMinimized(!isHostMinimized)}
+              djState={djState}
+              onToggleDJ={toggleDJActive}
+              onCustomAnnouncement={addCustomAnnouncement}
             />
           </div>
         </div>
@@ -164,12 +148,14 @@ const Index = () => {
         <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <Card className="glass-effect p-6 hover-lift">
             <div className="flex items-center space-x-3 mb-4">
-              <div className="w-12 h-12 radio-gradient rounded-xl flex items-center justify-center">
+              <div className={`w-12 h-12 radio-gradient rounded-xl flex items-center justify-center ${djState.isActive ? 'animate-pulse' : ''}`}>
                 <Zap className="w-6 h-6 text-white" />
               </div>
               <div>
                 <h3 className="font-semibold text-foreground">Locutor IA</h3>
-                <p className="text-sm text-muted-foreground">Inteligencia artificial</p>
+                <p className="text-sm text-muted-foreground">
+                  {djState.isActive ? 'Activo' : 'Inactivo'} - {djState.isSpeaking ? 'Hablando' : 'Esperando'}
+                </p>
               </div>
             </div>
             <p className="text-muted-foreground">
@@ -216,8 +202,17 @@ const Index = () => {
       <AdvancedAudioPlayer 
         userTracks={userTracks}
         userTier={user?.subscription_tier || 'free'}
+        onDJActivate={toggleDJActive}
       />
     </div>
+  );
+};
+
+const Index = () => {
+  return (
+    <RadioProvider>
+      <RadioContent />
+    </RadioProvider>
   );
 };
 
