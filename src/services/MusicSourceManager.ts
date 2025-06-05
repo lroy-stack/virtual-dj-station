@@ -28,18 +28,13 @@ export class MusicSourceManager {
   private currentSourceIndex = 0;
   private lastJamendoPage = 0;
   private jamendoSearchStrategies = [
-    // Strategy 1: Most popular without tags
+    // Simplified strategies - less restrictive
     { tags: '', order: 'popularity_total' },
-    // Strategy 2: Popular rock
-    { tags: 'rock', order: 'popularity_total' },
-    // Strategy 3: Popular electronic
-    { tags: 'electronic', order: 'popularity_total' },
-    // Strategy 4: Popular pop
-    { tags: 'pop', order: 'popularity_total' },
-    // Strategy 5: Recent popular
     { tags: '', order: 'popularity_month' },
-    // Strategy 6: No filters, just get anything
-    { tags: '', order: 'releasedate' }
+    { tags: '', order: 'releasedate' },
+    { tags: 'rock', order: 'popularity_total' },
+    { tags: 'electronic', order: 'popularity_total' },
+    { tags: 'pop', order: 'popularity_total' }
   ];
   private currentStrategyIndex = 0;
 
@@ -68,7 +63,7 @@ export class MusicSourceManager {
     for (let strategyAttempt = 0; strategyAttempt < this.jamendoSearchStrategies.length; strategyAttempt++) {
       try {
         const strategy = this.jamendoSearchStrategies[this.currentStrategyIndex];
-        this.lastJamendoPage = (this.lastJamendoPage % 5) + 1; // Rotate pages 1-5
+        this.lastJamendoPage = (this.lastJamendoPage % 10) + 1; // Rotate pages 1-10
         
         const cacheKey = `jamendo_${count}_${this.lastJamendoPage}_${this.currentStrategyIndex}`;
         
@@ -82,26 +77,38 @@ export class MusicSourceManager {
 
         console.log(`Fetching Jamendo tracks - Strategy: ${this.currentStrategyIndex}, Page: ${this.lastJamendoPage}, Tags: "${strategy.tags}"`);
         
-        // Build URL with current strategy
+        // Build simplified URL
         let url = `https://api.jamendo.com/v3.0/tracks/?client_id=${this.jamendoClientId}&format=json&limit=${count}&offset=${(this.lastJamendoPage - 1) * count}&order=${strategy.order}&include=musicinfo&audioformat=mp32`;
         
-        if (strategy.tags) {
-          url += `&tags=${strategy.tags}`;
+        // Only add tags if they exist
+        if (strategy.tags && strategy.tags.trim()) {
+          url += `&tags=${encodeURIComponent(strategy.tags)}`;
         }
 
         console.log(`Jamendo API URL: ${url}`);
         
-        const tracksResponse = await fetch(url);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        
+        const tracksResponse = await fetch(url, {
+          signal: controller.signal,
+          headers: {
+            'Accept': 'application/json',
+          }
+        });
+        
+        clearTimeout(timeoutId);
         
         if (!tracksResponse.ok) {
-          throw new Error(`Jamendo API HTTP error: ${tracksResponse.status}`);
+          throw new Error(`Jamendo API HTTP error: ${tracksResponse.status} ${tracksResponse.statusText}`);
         }
 
         const tracksData = await tracksResponse.json();
-        console.log('Full Jamendo API response:', tracksData);
+        console.log('Jamendo API response status:', tracksData.headers?.status);
+        console.log('Number of results:', tracksData.results?.length || 0);
         
-        if (tracksData.headers.status !== 'success') {
-          throw new Error(`Jamendo API error: ${tracksData.headers.error_message || 'Unknown error'}`);
+        if (tracksData.headers?.status !== 'success') {
+          throw new Error(`Jamendo API error: ${tracksData.headers?.error_message || 'Unknown error'}`);
         }
 
         if (!tracksData.results || tracksData.results.length === 0) {
@@ -115,14 +122,14 @@ export class MusicSourceManager {
         const tracks: ExternalTrack[] = [];
         
         for (const track of tracksData.results) {
-          // Validate that the track has necessary properties
+          // More lenient validation
           if (!track.audio || !track.name || !track.artist_name) {
-            console.warn('Skipping incomplete track:', track);
+            console.warn('Skipping incomplete track:', track.id);
             continue;
           }
 
-          // Validate audio URL
-          if (!await this.validateAudioUrl(track.audio)) {
+          // Basic URL validation
+          if (!this.isValidAudioUrl(track.audio)) {
             console.warn(`Skipping track with invalid audio URL: ${track.audio}`);
             continue;
           }
@@ -140,7 +147,7 @@ export class MusicSourceManager {
             attribution: `"${track.name}" by ${track.artist_name} from Jamendo`
           };
 
-          console.log(`✓ Valid track added: ${externalTrack.title} by ${externalTrack.artist} - URL: ${externalTrack.stream_url}`);
+          console.log(`✓ Valid track added: ${externalTrack.title} by ${externalTrack.artist}`);
           tracks.push(externalTrack);
         }
 
@@ -164,15 +171,22 @@ export class MusicSourceManager {
     throw new Error('All Jamendo search strategies failed');
   }
 
-  private async validateAudioUrl(url: string): Promise<boolean> {
+  private isValidAudioUrl(url: string): boolean {
     try {
-      // Simple URL format validation
-      if (!url || !url.startsWith('http')) {
+      // Basic URL format validation
+      if (!url || typeof url !== 'string') {
         return false;
       }
       
-      // Check if it's a reasonable audio URL
-      if (url.includes('.mp3') || url.includes('audio') || url.includes('jamendo')) {
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        return false;
+      }
+      
+      // Check if it contains Jamendo domain or audio-like extensions
+      if (url.includes('jamendo.com') || 
+          url.includes('.mp3') || 
+          url.includes('audio') ||
+          url.includes('trackid=')) {
         return true;
       }
       
@@ -186,27 +200,29 @@ export class MusicSourceManager {
   private getReliableFallbackTracks(count: number): ExternalTrack[] {
     console.log('Using reliable fallback tracks due to API failure');
     
-    // More reliable fallback tracks
+    // More reliable fallback tracks with working URLs
     const fallbackTracks: ExternalTrack[] = [
       {
         id: 'fallback_1',
-        title: 'Chill Electronic',
+        title: 'Demo Track 1',
         artist: 'Demo Artist',
         duration: 240,
         stream_url: 'https://www2.cs.uic.edu/~i101/SoundFiles/BabyElephantWalk60.wav',
         source: 'jamendo',
         license: 'Demo Content',
-        attribution: 'Demo content for testing'
+        attribution: 'Demo content for testing',
+        genre: 'Demo'
       },
       {
         id: 'fallback_2',
-        title: 'Ambient Sounds',
+        title: 'Demo Track 2',
         artist: 'Demo Artist',
         duration: 180,
         stream_url: 'https://www2.cs.uic.edu/~i101/SoundFiles/PinkPanther30.wav',
         source: 'jamendo',
         license: 'Demo Content',
-        attribution: 'Demo content for testing'
+        attribution: 'Demo content for testing',
+        genre: 'Demo'
       }
     ];
 

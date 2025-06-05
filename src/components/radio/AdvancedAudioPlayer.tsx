@@ -20,6 +20,7 @@ import {
   Shuffle
 } from 'lucide-react';
 import { useAdvancedRadio } from '@/hooks/useAdvancedRadio';
+import { formatDuration, getArtworkUrl, isUserTrack } from '@/utils/audioHelpers';
 import AdvancedAudioVisualizer from './AdvancedAudioVisualizer';
 import DJAvatar from './DJAvatar';
 
@@ -63,12 +64,6 @@ const AdvancedAudioPlayer: React.FC<AdvancedAudioPlayerProps> = ({
       setVolume(0);
       setIsMuted(true);
     }
-  };
-
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   const getCurrentTime = () => {
@@ -165,9 +160,9 @@ const AdvancedAudioPlayer: React.FC<AdvancedAudioPlayerProps> = ({
           <div className="flex items-center gap-4 min-w-0 flex-1">
             <div className="relative">
               <div className="w-20 h-20 bg-gradient-to-br from-primary to-secondary rounded-xl flex items-center justify-center overflow-hidden shadow-lg">
-                {radioState.currentTrack && 'artwork_url' in radioState.currentTrack && radioState.currentTrack.artwork_url ? (
+                {radioState.currentTrack && getArtworkUrl(radioState.currentTrack) ? (
                   <img 
-                    src={radioState.currentTrack.artwork_url} 
+                    src={getArtworkUrl(radioState.currentTrack)} 
                     alt={radioState.currentTrack.title}
                     className="w-full h-full object-cover"
                   />
@@ -207,8 +202,8 @@ const AdvancedAudioPlayer: React.FC<AdvancedAudioPlayerProps> = ({
               {radioState.currentTrack && (
                 <div className="space-y-1">
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>{formatTime(getCurrentTime())}</span>
-                    <span>{formatTime(radioState.currentTrack.duration)}</span>
+                    <span>{formatDuration(getCurrentTime())}</span>
+                    <span>{formatDuration(radioState.currentTrack.duration)}</span>
                   </div>
                   
                   <div className="relative">

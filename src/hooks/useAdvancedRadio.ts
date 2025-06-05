@@ -1,7 +1,8 @@
+
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { Track } from '@/types';
 import { MusicSourceManager, QueueItem, ExternalTrack } from '@/services/MusicSourceManager';
-import { toast } from 'sonner';
+import { useToast } from '@/hooks/use-toast';
 
 export interface AdvancedRadioState {
   isPlaying: boolean;
@@ -18,7 +19,14 @@ export interface AdvancedRadioState {
   errorCount: number;
 }
 
+// Helper function to get audio URL consistently
+const getAudioUrl = (track: Track | ExternalTrack): string => {
+  return 'file_url' in track ? track.file_url : track.stream_url;
+};
+
 export const useAdvancedRadio = (userTracks: Track[] = [], userTier: string = 'free') => {
+  const { toast } = useToast();
+  
   const [radioState, setRadioState] = useState<AdvancedRadioState>({
     isPlaying: false,
     currentTrack: undefined,
@@ -53,10 +61,12 @@ export const useAdvancedRadio = (userTracks: Track[] = [], userTier: string = 'f
     // Audio principal
     audioRef.current = new Audio();
     audioRef.current.volume = radioState.volume;
+    audioRef.current.crossOrigin = "anonymous";
     
     // Audio para crossfade
     nextAudioRef.current = new Audio();
     nextAudioRef.current.volume = 0;
+    nextAudioRef.current.crossOrigin = "anonymous";
 
     const audio = audioRef.current;
     
@@ -116,8 +126,10 @@ export const useAdvancedRadio = (userTracks: Track[] = [], userTier: string = 'f
       }));
 
       // Show user-friendly error message
-      toast.error("Error de reproducción", {
+      toast({
+        title: "Error de reproducción",
         description: "Problema al cargar la música. Cambiando a la siguiente canción...",
+        variant: "destructive",
       });
 
       // Evitar loop infinito de errores
@@ -128,8 +140,10 @@ export const useAdvancedRadio = (userTracks: Track[] = [], userTier: string = 'f
         }, 2000);
       } else {
         console.error('Too many consecutive errors, stopping playback');
-        toast.error("Error persistente", {
+        toast({
+          title: "Error persistente",
           description: "Múltiples errores de reproducción. Reiniciando sistema...",
+          variant: "destructive",
         });
         setRadioState(prev => ({ 
           ...prev, 
@@ -156,6 +170,42 @@ export const useAdvancedRadio = (userTracks: Track[] = [], userTier: string = 'f
     audio.addEventListener('loadeddata', handleLoadedData);
   };
 
+  const validateAudioUrl = async (url: string): Promise<boolean> => {
+    try {
+      // Basic URL validation
+      if (!url || !url.startsWith('http')) {
+        console.warn('Invalid URL format:', url);
+        return false;
+      }
+
+      // Test if URL is reachable with HEAD request
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      
+      try {
+        const response = await fetch(url, {
+          method: 'HEAD',
+          signal: controller.signal,
+          mode: 'no-cors' // Allow cross-origin requests
+        });
+        clearTimeout(timeoutId);
+        return true; // If no error thrown, assume it's valid
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        // For CORS issues, we'll assume the URL might still work for audio
+        if (url.includes('jamendo') || url.includes('.mp3')) {
+          console.warn('CORS issue but might work for audio:', url);
+          return true;
+        }
+        console.warn('URL validation failed:', url, fetchError);
+        return false;
+      }
+    } catch (error) {
+      console.warn('URL validation error:', error);
+      return false;
+    }
+  };
+
   const initializeQueue = async () => {
     console.log('Initializing queue...');
     setRadioState(prev => ({ ...prev, isLoading: true }));
@@ -175,6 +225,21 @@ export const useAdvancedRadio = (userTracks: Track[] = [], userTier: string = 'f
         throw new Error('No tracks available in queue');
       }
 
+      // Validate first track URL
+      const firstTrack = fullQueue[0]?.track;
+      if (firstTrack) {
+        const audioUrl = getAudioUrl(firstTrack);
+        const isValid = await validateAudioUrl(audioUrl);
+        if (!isValid) {
+          console.warn('First track URL invalid, trying next...');
+          // Remove invalid track and try next
+          fullQueue.shift();
+          if (fullQueue.length === 0) {
+            throw new Error('No valid tracks available');
+          }
+        }
+      }
+
       console.log(`Queue initialized with ${fullQueue.length} tracks`);
       console.log('First track in queue:', fullQueue[0]?.track);
       
@@ -192,14 +257,17 @@ export const useAdvancedRadio = (userTracks: Track[] = [], userTier: string = 'f
       }
 
       // Show success message
-      toast.success("Música cargada", {
+      toast({
+        title: "Música cargada",
         description: `${fullQueue.length} canciones disponibles`,
       });
 
     } catch (error) {
       console.error('Error initializing queue:', error);
-      toast.error("Error de inicialización", {
+      toast({
+        title: "Error de inicialización",
         description: "No se pudo cargar la música. Reintentando...",
+        variant: "destructive",
       });
       setRadioState(prev => ({ ...prev, isLoading: false }));
       
@@ -210,10 +278,10 @@ export const useAdvancedRadio = (userTracks: Track[] = [], userTier: string = 'f
     }
   };
 
-  const loadTrack = (track: Track | ExternalTrack) => {
+  const loadTrack = async (track: Track | ExternalTrack) => {
     if (!audioRef.current) return;
 
-    const url = 'file_url' in track ? track.file_url : track.stream_url;
+    const url = getAudioUrl(track);
     console.log(`Loading track: "${track.title}" by ${track.artist}`);
     console.log(`URL: ${url}`);
     
@@ -221,6 +289,19 @@ export const useAdvancedRadio = (userTracks: Track[] = [], userTier: string = 'f
     if (retryTimeoutRef.current) {
       clearTimeout(retryTimeoutRef.current);
       retryTimeoutRef.current = null;
+    }
+
+    // Validate URL before loading
+    const isValid = await validateAudioUrl(url);
+    if (!isValid) {
+      console.error('Invalid URL, skipping track:', url);
+      toast({
+        title: "Canción no válida",
+        description: "Saltando a la siguiente canción...",
+        variant: "destructive",
+      });
+      nextTrack();
+      return;
     }
     
     audioRef.current.src = url;
@@ -238,7 +319,7 @@ export const useAdvancedRadio = (userTracks: Track[] = [], userTier: string = 'f
 
     const nextTrack = radioState.queue[1]?.track;
     if (nextTrack) {
-      const url = 'file_url' in nextTrack ? nextTrack.file_url : nextTrack.stream_url;
+      const url = getAudioUrl(nextTrack);
       console.log(`Preloading next track: ${nextTrack.title}`);
       nextAudioRef.current.src = url;
       nextAudioRef.current.load();
@@ -302,11 +383,13 @@ export const useAdvancedRadio = (userTracks: Track[] = [], userTier: string = 'f
       setRadioState(prev => ({ ...prev, isPlaying: true }));
     } catch (error) {
       console.error('Error starting playback:', error);
-      toast.error("Error de reproducción", {
+      toast({
+        title: "Error de reproducción",
         description: "No se pudo iniciar la reproducción",
+        variant: "destructive",
       });
     }
-  }, [radioState.currentTrack]);
+  }, [radioState.currentTrack, toast]);
 
   const pause = useCallback(() => {
     if (audioRef.current) {
