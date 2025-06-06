@@ -1,37 +1,39 @@
 
-import React, { useState } from 'react';
+import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import DashboardHome from '@/components/dashboard/DashboardHome';
 import SubscriptionPage from '@/components/dashboard/SubscriptionPage';
-import { User } from '@/types';
 
 const DashboardPage: React.FC = () => {
-  // TODO: Replace with actual auth state
-  const [user] = useState<User | null>({
-    id: '1',
-    email: 'usuario@ejemplo.com',
-    name: 'Usuario Demo',
-    subscription_tier: 'artist_basic',
-    subscription_status: 'active',
-    created_at: '2024-01-01',
-    updated_at: '2024-01-01'
-  });
+  const { user, userProfile, signOut } = useAuth();
 
-  const handleLogout = () => {
-    console.log('Logout from dashboard');
-    // TODO: Implement actual logout logic
-  };
-
+  // Si no hay usuario autenticado, redirigir al login
   if (!user) {
     return <Navigate to="/login" replace />;
   }
 
+  // Crear un objeto User compatible basado en el perfil de usuario real
+  const dashboardUser = {
+    id: user.id,
+    email: user.email || '',
+    name: userProfile?.username || user.email || 'Usuario',
+    subscription_tier: userProfile?.subscription_type || 'free',
+    subscription_status: 'active',
+    created_at: user.created_at || new Date().toISOString(),
+    updated_at: user.updated_at || new Date().toISOString()
+  };
+
+  const handleLogout = async () => {
+    await signOut();
+  };
+
   return (
-    <DashboardLayout user={user} onLogout={handleLogout}>
+    <DashboardLayout user={dashboardUser} onLogout={handleLogout}>
       <Routes>
-        <Route index element={<DashboardHome user={user} />} />
-        <Route path="subscription" element={<SubscriptionPage user={user} />} />
+        <Route index element={<DashboardHome user={dashboardUser} />} />
+        <Route path="subscription" element={<SubscriptionPage user={dashboardUser} />} />
         {/* TODO: Add more dashboard routes */}
         <Route path="music" element={<div>Gestión de Música (Por implementar)</div>} />
         <Route path="upload" element={<div>Subir Música (Por implementar)</div>} />

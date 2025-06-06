@@ -1,4 +1,7 @@
+
 import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import Navigation from "@/components/layout/Navigation";
 import AdvancedAudioPlayer from "@/components/radio/AdvancedAudioPlayer";
 import NowPlaying from "@/components/radio/NowPlaying";
@@ -11,11 +14,20 @@ import { Play, Users, Radio, Zap, Crown, Music } from "lucide-react";
 import { RadioProvider } from "@/contexts/RadioContext";
 import { useSyncedRadio } from "@/hooks/useSyncedRadio";
 import { useSyncedDJ } from "@/hooks/useSyncedDJ";
+import { useAuth } from "@/hooks/useAuth";
 import { useState } from "react";
 
 const RadioContent = () => {
   const [isHostMinimized, setIsHostMinimized] = useState(false);
-  const [user] = useState(null); // TODO: Replace with actual auth state
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  // Redirigir usuarios autenticados al dashboard
+  useEffect(() => {
+    if (user) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [user, navigate]);
 
   // Mock user tracks
   const userTracks = [
@@ -40,12 +52,12 @@ const RadioContent = () => {
     togglePlay, 
     skipToQueueItem,
     contextState
-  } = useSyncedRadio(userTracks, user?.subscription_tier || 'free');
+  } = useSyncedRadio(userTracks, user?.email || 'free');
 
   const { djState, toggleDJActive, addCustomAnnouncement } = useSyncedDJ();
 
-  const handleLogout = () => {
-    console.log('Logout');
+  const handleLogout = async () => {
+    await signOut();
   };
 
   const stats = {
@@ -53,6 +65,11 @@ const RadioContent = () => {
     songsToday: 89,
     artistsActive: 34
   };
+
+  // Si el usuario está autenticado, no mostrar esta página (se redirige arriba)
+  if (user) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/10">
@@ -84,9 +101,14 @@ const RadioContent = () => {
               <Play className="w-6 h-6 mr-2" />
               {radioState.isPlaying ? 'Pausar' : 'Escuchar Ahora'}
             </Button>
-            <Button variant="outline" size="lg" className="px-8 py-4">
+            <Button 
+              variant="outline" 
+              size="lg" 
+              className="px-8 py-4"
+              onClick={() => navigate('/register')}
+            >
               <Crown className="w-5 h-5 mr-2" />
-              Ver Planes
+              Crear Cuenta
             </Button>
           </div>
 
@@ -127,7 +149,7 @@ const RadioContent = () => {
               queue={radioState.queue}
               currentIndex={0}
               onSkipTo={skipToQueueItem}
-              canReorder={user?.subscription_tier !== 'free'}
+              canReorder={false}
             />
           </div>
 
@@ -201,7 +223,7 @@ const RadioContent = () => {
       {/* Advanced Audio Player - Always visible */}
       <AdvancedAudioPlayer 
         userTracks={userTracks}
-        userTier={user?.subscription_tier || 'free'}
+        userTier="free"
         onDJActivate={toggleDJActive}
       />
     </div>

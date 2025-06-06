@@ -68,10 +68,11 @@ const RegisterPage: React.FC = () => {
     setIsLoading(false);
     
     if (!error) {
+      // Redirigir al dashboard después del registro exitoso
       if (formData.userType !== 'listener') {
         navigate('/plans');
       } else {
-        navigate('/');
+        navigate('/dashboard');
       }
     }
   };
