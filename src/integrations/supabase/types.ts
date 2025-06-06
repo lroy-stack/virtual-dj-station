@@ -660,6 +660,57 @@ export type Database = {
         }
         Relationships: []
       }
+      dj_preferences: {
+        Row: {
+          announcement_types: string[] | null
+          created_at: string
+          dj_enabled: boolean | null
+          dj_frequency: string | null
+          dj_personality: string | null
+          id: string
+          updated_at: string
+          user_id: string
+          voice_id: string | null
+        }
+        Insert: {
+          announcement_types?: string[] | null
+          created_at?: string
+          dj_enabled?: boolean | null
+          dj_frequency?: string | null
+          dj_personality?: string | null
+          id?: string
+          updated_at?: string
+          user_id: string
+          voice_id?: string | null
+        }
+        Update: {
+          announcement_types?: string[] | null
+          created_at?: string
+          dj_enabled?: boolean | null
+          dj_frequency?: string | null
+          dj_personality?: string | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+          voice_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dj_preferences_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "client_onboarding_status"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "dj_preferences_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "users_with_email"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       game_sessions: {
         Row: {
           category: string | null
@@ -1268,6 +1319,63 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "client_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      radio_user_profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          id: string
+          last_activity: string | null
+          listening_hours: number | null
+          preferred_genres: string[] | null
+          subscription_type: string
+          tracks_uploaded: number | null
+          updated_at: string
+          user_id: string
+          username: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          id?: string
+          last_activity?: string | null
+          listening_hours?: number | null
+          preferred_genres?: string[] | null
+          subscription_type?: string
+          tracks_uploaded?: number | null
+          updated_at?: string
+          user_id: string
+          username?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          id?: string
+          last_activity?: string | null
+          listening_hours?: number | null
+          preferred_genres?: string[] | null
+          subscription_type?: string
+          tracks_uploaded?: number | null
+          updated_at?: string
+          user_id?: string
+          username?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "radio_user_profiles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "client_onboarding_status"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "radio_user_profiles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "users_with_email"
             referencedColumns: ["id"]
           },
         ]
@@ -1916,6 +2024,69 @@ export type Database = {
           },
           {
             foreignKeyName: "user_stats_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users_with_email"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_tracks: {
+        Row: {
+          album: string | null
+          artist: string
+          cover_url: string | null
+          created_at: string
+          duration: number | null
+          file_url: string
+          genre: string | null
+          id: string
+          is_public: boolean | null
+          play_count: number | null
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          album?: string | null
+          artist: string
+          cover_url?: string | null
+          created_at?: string
+          duration?: number | null
+          file_url: string
+          genre?: string | null
+          id?: string
+          is_public?: boolean | null
+          play_count?: number | null
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          album?: string | null
+          artist?: string
+          cover_url?: string | null
+          created_at?: string
+          duration?: number | null
+          file_url?: string
+          genre?: string | null
+          id?: string
+          is_public?: boolean | null
+          play_count?: number | null
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_tracks_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "client_onboarding_status"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "user_tracks_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users_with_email"
