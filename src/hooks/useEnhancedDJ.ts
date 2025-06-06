@@ -49,7 +49,16 @@ export const useEnhancedDJ = () => {
         .single();
 
       if (data) {
-        setDjState(prev => ({ ...prev, preferences: data }));
+        // Map the Supabase data to our DJPreferences interface with proper type casting
+        const preferences: DJPreferences = {
+          dj_enabled: data.dj_enabled,
+          dj_frequency: data.dj_frequency as 'low' | 'medium' | 'high',
+          dj_personality: data.dj_personality as 'enthusiastic' | 'friendly' | 'professional' | 'casual',
+          voice_id: data.voice_id,
+          announcement_types: data.announcement_types || []
+        };
+
+        setDjState(prev => ({ ...prev, preferences }));
       }
     } catch (error) {
       console.error('Error fetching DJ preferences:', error);
